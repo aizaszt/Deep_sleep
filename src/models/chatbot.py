@@ -1,101 +1,66 @@
 import os
-import pymysql
 from dotenv import load_dotenv
 from groq import Groq
 from pathlib import Path
+from db_queries import get_data
 
-env_file = Path(__file__).resolve().parent.parent.parent / ".env"
-load_dotenv(dotenv_path=env_file)
-
-print(f"✅ База из .env: {os.getenv('DB_NAME')}")
-
-api_key = os.getenv("GROQ_API_KEY")
-client = Groq(api_key=api_key) if api_key else None
-
-
-def get_db_connection():
-    return pymysql.connect(
-        host=os.getenv("DB_HOST", "127.0.0.1"),
-        port=int(os.getenv("DB_PORT", 3306)),
-        database=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
-        charset='utf8mb4'
-    )
-
-
-def get_tables():
-    conn = get_db_connection()
-    with conn.cursor() as cursor:
-        cursor.execute("SHOW TABLES")
-        tables = [row[0] for row in cursor.fetchall()]
-    conn.close()
-    return tables
-
-
-def get_db_context():
-    conn = get_db_connection()
-    tables = get_tables()
-    db_context = ""
-    with conn.cursor() as cursor:
-        for table in tables:
-            cursor.execute(f"SELECT * FROM {table} LIMIT 5")
-            rows = cursor.fetchall()
-            cols = [desc[0] for desc in cursor.description]
-            db_context += f"\nТаблица {table}:\nКолонки: {cols}\n{rows}\n"
-    conn.close()
-    return db_context
+load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent.parent / ".env")
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
 def chat():
-    print("🤖 Подключаюсь к базе данных...")
+    print("🤖 Загружаю данные из базы...")
     try:
-        tables = get_tables()
-        print(f"✅ Найдены таблицы: {', '.join(tables)}")
+        data = get_data()
+        print("✅ Данные загружены!\n")
     except Exception as e:
-        print(f"❌ Ошибка подключения к БД: {e}")
+        print(f"❌ Ошибка БД: {e}")
         return
 
-    print("\n💬 Чат готов! Введи 'выход' для выхода.\n")
+    messages = [{
+        "role": "system",
+        "content": (
+            "Ты — аналитик данных по исследованию сна (100 000 записей).\n"
+            "Отвечай ТОЛЬКО по данным ниже. Не выдумывай.\n"
+            "Отвечай кратко с цифрами. Отвечай на языке вопроса.\n\n"
+            "Данные покрывают:\n"
+            "1. Базовая статистика (сон, возраст, BMI, пол, хронотип)\n"
+            "2. Образ жизни (кофеин, алкоголь, экран, снотворное)\n"
+            "3. Окружающая среда (сезон, температура, день/выходной)\n"
+            "4. Сменная работа vs стресс (физиология, REM, пульс)\n"
+            "5. Риск выгорания (burnout_index, профессии, страны)\n\n"
+            f"=== ДАННЫЕ ===\n{data}\n=============="
+        )
+    }]
 
+    print("💬 Чат готов! Введи 'выход' для выхода.\n")
     while True:
         user_input = input("Ты: ").strip()
         if user_input.lower() in ["выход", "exit"]:
-            print("До свидания!")
             break
         if not user_input:
             continue
 
+        messages.append({"role": "user", "content": user_input})
         print("⏳ Думаю...")
         try:
-            db_data = get_db_context()
-        except Exception as e:
-            print(f"❌ Ошибка БД: {e}")
-            continue
-
-        prompt = f"""
-Ты — аналитик данных. Анализируй данные и давай конкретные выводы.
-Отвечай кратко и по делу — только цифры и факты.
-Отвечай на том же языке, на котором задан вопрос.
-
-=== ДАННЫЕ ИЗ БАЗЫ ===
-{db_data}
-======================
-
-Вопрос: {user_input}
-
-Дай конкретный аналитический ответ с цифрами и выводами.
-"""
-        try:
-            response = client.chat.completions.create(
+            r = client.chat.completions.create(
                 model="llama-3.1-8b-instant",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=1000
+                messages=messages,
+                max_tokens=500
             )
-            print(f"\n🤖 Бот: {response.choices[0].message.content}\n")
+            ans = r.choices[0].message.content
+            messages.append({"role": "assistant", "content": ans})
+            print(f"\n🤖 {ans}\n")
         except Exception as e:
-            print(f"❌ Ошибка Groq: {e}\n")
+            print(f"❌ {e}\n")
+            if "413" in str(e):
+                messages = messages[:1] + messages[-2:]
+                print("⚠️ История сокращена, попробуй снова.\n")
 
 
 if __name__ == "__main__":
     chat()
+
+
+
