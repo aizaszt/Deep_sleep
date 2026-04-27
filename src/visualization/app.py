@@ -13,8 +13,10 @@ client = Groq(api_key=os.getenv('GROQ_API_KEY'))
 
 st.set_page_config(page_title='Sleep Analytics AI', page_icon='🌙', layout='wide')
 
-# ---------- DB ----------
+
 def get_connection():
+
+
     return pymysql.connect(
         host=os.getenv('DB_HOST', '127.0.0.1'),
         port=int(os.getenv('DB_PORT', 3306)),
@@ -26,6 +28,8 @@ def get_connection():
 
 # ---------- AI ----------
 def ask_ai(system_prompt, user_prompt):
+
+
     r = client.chat.completions.create(
         model='llama-3.3-70b-versatile',
         messages=[
@@ -35,7 +39,10 @@ def ask_ai(system_prompt, user_prompt):
     )
     return r.choices[0].message.content
 
+
 def generate_sleep_advice(profile):
+
+
     prompt = f"""
 Age: {profile['age']}
 Gender: {profile['gender']}
@@ -70,8 +77,8 @@ with tab1:
     if st.button('Run analysis') and q:
         st.info('Connect your SQL + LLM query pipeline here.')
         demo = pd.DataFrame({
-            'group':['Male','Female'],
-            'avg_sleep':[6.8,7.2]
+            'group'  :['Male' ,'Female'],
+            'avg_sleep' :[6.8,7.2]
         })
         st.dataframe(demo, use_container_width=True)
         fig = px.bar(demo, x='group', y='avg_sleep', title='Average Sleep Hours')
