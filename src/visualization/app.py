@@ -1,119 +1,125 @@
+import sys
 import os
-import pymysql
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from dotenv import load_dotenv
 from pathlib import Path
-from groq import Groq
 
-# ---------- CONFIG ----------
-load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent.parent / '.env')
-client = Groq(api_key=os.getenv('GROQ_API_KEY'))
+# ── ПУТИ И ИМПОРТЫ ──────────────────────────────────────────────────────────
+# Поднимаемся до /src, чтобы видеть папки models и файлы в корне src
+src_path = str(Path(__file__).resolve().parent.parent)
+if src_path not in sys.path:
+    sys.path.append(src_path)
 
-st.set_page_config(page_title='Sleep Analytics AI', page_icon='🌙', layout='wide')
+try:
+    from models.chat import generate_sql, execute_sql, generate_answer
+    from db_queries import get_data
+except ImportError as e:
+    st.error(f"Ошибка импорта: {e}. Проверьте структуру папок!")
 
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE CONFIG
+# ─────────────────────────────────────────────────────────────────────────────
+st.set_page_config(page_title="Deep Sleep AI", page_icon="🌙", layout="wide")
 
-def get_connection():
+# Загрузка данных для контекста
+df = get_data()
 
+# ─────────────────────────────────────────────────────────────────────────────
+# ЛОГИКА АНАЛИЗА (НОВАЯ СТРАНИЦА)
+# ─────────────────────────────────────────────────────────────────────────────
+def analyze_stress_level(sleep, quality, caffeine, work_hrs):
+    # Упрощенная логика оценки (можно заменить на вызов ML-модели)
+    score = 0
+    if sleep < 6: score += 30
+    if quality < 5: score += 20
+    if caffeine > 300: score += 15
+    if work_hrs > 9: score += 25
+    
+    if score > 70: return "Высокий 🔥", "Срочно сократите кофеин и увеличьте время сна. Риск выгорания максимален."
+    if score > 40: return "Средний ⚠️", "Ваши показатели нестабильны. Рекомендуется наладить режим сна."
+    return "Низкий ✅", "Отличные показатели! Продолжайте в том же духе."
 
-    return pymysql.connect(
-        host=os.getenv('DB_HOST', '127.0.0.1'),
-        port=int(os.getenv('DB_PORT', 3306)),
-        database=os.getenv('DB_NAME'),
-        user=os.getenv('DB_USER'),
-        password=os.getenv('DB_PASSWORD'),
-        charset='utf8mb4'
-    )
+# ─────────────────────────────────────────────────────────────────────────────
+# SIDEBAR
+# ─────────────────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.title("🧠 Deep Sleep Nav")
+    page = st.radio("Перейти к:", ["📊 Дашборд", "🤖 AI Чат-бот", "🌡️ Анализ рисков"])
+    st.divider()
+    st.info(f"Записей в базе: {len(df)}")
 
-# ---------- AI ----------
-def ask_ai(system_prompt, user_prompt):
+# ─────────────────────────────────────────────────────────────────────────────
+# СТРАНИЦА 3: АНАЛИЗ РИСКОВ (ВАШ ЗАПРОС)
+# ─────────────────────────────────────────────────────────────────────────────
+if page == "🌡️ Анализ рисков":
+    st.header("🌡️ Индивидуальный прогноз стресса", divider="orange")
+    st.write("Настройте метрики ниже, чтобы ИИ проанализировал ваш возможный уровень стресса.")
 
+    col1, col2 = st.columns([1, 2])
 
-    r = client.chat.completions.create(
-        model='llama-3.3-70b-versatile',
-        messages=[
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': user_prompt}
-        ]
-    )
-    return r.choices[0].message.content
+    with col1:
+        st.subheader("Ваши показатели")
+        s_sleep = st.slider("Сон (часы)", 3.0, 12.0, 7.0)
+        s_qual = st.slider("Качество сна (1-10)", 1, 10, 6)
+        s_caff = st.select_slider("Кофеин (мг)", options=[0, 50, 100, 200, 300, 400, 500], value=100)
+        s_work = st.slider("Рабочие часы", 0, 16, 8)
 
-
-def generate_sleep_advice(profile):
-
-
-    prompt = f"""
-Age: {profile['age']}
-Gender: {profile['gender']}
-Sleep hours: {profile['sleep_hours']}
-Quality: {profile['quality']}/10
-Stress: {profile['stress']}/10
-Screen time before sleep: {profile['screen']}
-Caffeine mg/day: {profile['caffeine']}
-Give concise practical advice in Russian.
-"""
-    return ask_ai('You are a sleep expert.', prompt)
-
-# ---------- STYLE ----------
-st.markdown("""
-<style>
-.stApp {background: linear-gradient(180deg,#0f172a,#111827); color:white;}
-.block-container {padding-top:2rem;}
-.title {font-size:3rem;font-weight:800;text-align:center;margin-bottom:1rem;}
-.card {background:rgba(255,255,255,.05);padding:1rem;border-radius:18px;margin-bottom:1rem;}
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("<div class='title'>🌙 Sleep Analytics AI v2</div>", unsafe_allow_html=True)
-
-# ---------- TABS ----------
-tab1, tab2 = st.tabs(['💬 AI Chat', '📊 Personal Analysis'])
-
-# ---------- TAB 1 ----------
-with tab1:
-    st.markdown("### Ask questions about your sleep database")
-    q = st.text_input('Example: average sleep duration by gender')
-    if st.button('Run analysis') and q:
-        st.info('Connect your SQL + LLM query pipeline here.')
-        demo = pd.DataFrame({
-            'group'  :['Male' ,'Female'],
-            'avg_sleep' :[6.8,7.2]
-        })
-        st.dataframe(demo, use_container_width=True)
-        fig = px.bar(demo, x='group', y='avg_sleep', title='Average Sleep Hours')
+    with col2:
+        level, advice = analyze_stress_level(s_sleep, s_qual, s_caff, s_work)
+        
+        st.subheader("Результат анализа")
+        st.metric("Уровень стресса", level)
+        
+        st.warning(f"**Совет:** {advice}")
+        
+        # Визуализация для наглядности
+        gauge_df = pd.DataFrame({"Метрика": ["Сон", "Качество", "Работа"], 
+                                 "Значение": [s_sleep, s_qual, s_work]})
+        fig = px.bar(gauge_df, x="Метрика", y="Значение", color="Метрика", template="plotly_dark")
         st.plotly_chart(fig, use_container_width=True)
 
-# ---------- TAB 2 ----------
-with tab2:
-    st.markdown('### Personal Sleep Assistant')
-    c1, c2 = st.columns(2)
-    with c1:
-        age = st.slider('Age', 18, 80, 25)
-        gender = st.selectbox('Gender', ['Male', 'Female'])
-        sleep_hours = st.slider('Sleep hours', 3.0, 12.0, 7.0)
-        quality = st.slider('Sleep quality', 1, 10, 6)
-    with c2:
-        stress = st.slider('Stress level', 1, 10, 5)
-        screen = st.slider('Screen time before sleep (min)', 0, 240, 60)
-        caffeine = st.slider('Caffeine mg/day', 0, 600, 100)
+# ─────────────────────────────────────────────────────────────────────────────
+# СТРАНИЦА 2: AI ЧАТ-БОТ
+# ─────────────────────────────────────────────────────────────────────────────
+elif page == "🤖 AI Чат-бот":
+    st.header("🤖 Чат с данными сна", divider="green")
+    
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
 
-    if st.button('✨ Get AI Advice'):
-        profile = {
-            'age': age,
-            'gender': gender,
-            'sleep_hours': sleep_hours,
-            'quality': quality,
-            'stress': stress,
-            'screen': screen,
-            'caffeine': caffeine
-        }
-        with st.spinner('Analyzing...'):
-            advice = generate_sleep_advice(profile)
-        st.markdown(f"<div class='card'>{advice}</div>", unsafe_allow_html=True)
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
 
-    st.markdown('### Quick Metrics')
+    user_input = st.chat_input("Например: 'Какой средний пульс у тех, кто пьет много кофе?'")
+
+    if user_input:
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        with st.chat_message("user"):
+            st.markdown(user_input)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Генерирую SQL и ищу ответ..."):
+                sql = generate_sql(user_input)
+                results = execute_sql(sql)
+                answer = generate_answer(user_input, sql, results)
+                
+                with st.expander("Техническая информация (SQL)"):
+                    st.code(sql, language="sql")
+                
+                st.markdown(answer)
+                st.session_state.messages.append({"role": "assistant", "content": answer})
+
+# ─────────────────────────────────────────────────────────────────────────────
+# СТРАНИЦА 1: ДАШБОРД
+# ─────────────────────────────────────────────────────────────────────────────
+else:
+    st.header("📊 Общий обзор данных", divider="blue")
     m1, m2, m3 = st.columns(3)
-    m1.metric('Recommended Sleep', '7-9 h')
-    m2.metric('Ideal Temp', '18-20°C')
-    m3.metric('Caffeine Cutoff', '8h before bed')
+    m1.metric("Ср. сон", f"{df['sleep'].mean():.1f} ч")
+    m2.metric("Ср. стресс", f"{df['stress'].mean():.1f}/10")
+    m3.metric("Кофеин", f"{df['caffeine'].mean():.0f} мг")
+    
+    fig_hist = px.histogram(df, x="age", color="sleep_disorder_risk", barmode="group", template="plotly_dark")
+    st.plotly_chart(fig_hist, use_container_width=True)

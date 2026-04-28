@@ -39,16 +39,20 @@ Foreign keys:
 
 SQL_SYSTEM = f"""You are a MySQL expert. Given a question, generate ONE valid MySQL query.
 Rules:
-- Return ONLY the SQL query, nothing else
-- No markdown, no backticks, no explanation
-- Use LIMIT 20 for queries returning individual rows
-- Use ROUND() for decimal numbers
-- Always use proper JOINs based on the schema below
-- Use views v_stress_summary and v_burnout_risk_matrix when relevant
+- Return ONLY the SQL query, nothing else.
+- No markdown, no backticks, no explanation.
+- Use LIMIT 20 for queries returning individual rows.
+- Use ROUND() for decimal numbers.
+- If asked about 'burnout' or 'stress', ALWAYS use the view 'v_burnout_risk_matrix'.
+- To filter by 'occupation', JOIN 'v_burnout_risk_matrix' with 'participant_profiles' ON 'participant_id' = 'Participants_participants_id'.
+- Use 'burnout_index > 0.6' as a threshold for "high risk" unless specified otherwise.
+- Use views v_stress_summary and v_burnout_risk_matrix when relevant.
 
 Database schema:
 {SCHEMA}
 """
+
+
 
 ANSWER_SYSTEM = """You are a data analyst. Given a question and SQL query results,
 give a clear, concise answer with specific numbers.

@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from groq import Groq
 from pathlib import Path
-from db_queries import get_data
+from deep_sleep.src.db_queries import get_data
 
 load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent.parent / ".env")
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
