@@ -1,9 +1,3 @@
-"""
-db_queries.py
-Подключение к MySQL через SQLAlchemy.
-burnout_index считается в pandas — без JOIN с вьюхой.
-"""
-
 import os
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -15,12 +9,15 @@ load_dotenv(os.path.join(_root, ".env"), override=True)
 
 
 def get_engine():
-    host     = os.getenv("DB_HOST", "127.0.0.1")
-    port     = os.getenv("DB_PORT", "3306")
+    host = os.getenv("DB_HOST", "127.0.0.1")
+    port = os.getenv("DB_PORT", "3306")
     database = os.getenv("DB_NAME", "deep_sleep")
-    user     = os.getenv("DB_USER", "root")
+    user = os.getenv("DB_USER", "root")
     password = os.getenv("DB_PASSWORD", "")
-    url = f"mysql+pymysql://{user}:{password}@{host}:{port}/{database}?charset=utf8mb4"
+    url = (
+        f"mysql+pymysql://{user}:{password}@{host}:{port}/"
+        f"{database}?charset=utf8mb4"
+    )
     return create_engine(url, pool_pre_ping=True)
 
 
@@ -107,7 +104,7 @@ def get_data() -> pd.DataFrame:
 
 if __name__ == "__main__":
     print("Тест: загружаю данные...")
-    df = get_data()
-    print(type(df))
-    print(df.shape)
-    print(df[["sleep", "stress", "caffeine", "burnout"]].head(3))
+    data = get_data()
+    print(type(data))
+    print(data.shape)
+    print(data[["sleep", "stress", "caffeine", "burnout"]].head(3))
